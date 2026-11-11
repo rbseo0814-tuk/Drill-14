@@ -1,3 +1,5 @@
+import random
+
 from pico2d import *
 
 import game_framework
@@ -15,6 +17,9 @@ FLY_SPEED_PPS = (FLY_SPEED_MPS * PIXEL_PER_METER)
 TIME_PER_ACTION = 0.4  # 날갯짓 1회에 걸리는 시간(초)
 ACTION_PER_TIME = 1.0 / TIME_PER_ACTION  # 초당 날갯짓 횟수
 FRAMES_PER_ACTION = 14  # 날갯짓 1회의 애니메이션 프레임 수
+# 날갯짓 1회 동안 날아가는 거리(boy 의 보폭과 같은 개념). 기준 속도에서 약 3.33m.
+# 새마다 속도가 달라도 이 거리를 유지하도록 날갯짓 빈도를 속도에 비례시킴.
+DISTANCE_PER_ACTION_M = FLY_SPEED_MPS * TIME_PER_ACTION
 
 # 크기: 시트 한 칸(가로 182px)이 실제 1.5m 가 되도록 축소해서 그림
 CELL_W = 182
@@ -56,19 +61,28 @@ for left, bottom, w, h, eye_x, eye_y in SHEET_FRAMES:
 class Bird:
     image = None
 
-    def __init__(self, x=800, y=450, dir=1):
+    def __init__(self, x=None, y=None, dir=None):
         if Bird.image is None:
             Bird.image = load_image('bird_animation.png')
-        self.x, self.y = x, y
-        self.dir = dir  # 1: 오른쪽, -1: 왼쪽
-        self.frame = 0.0
+        # 위치/방향을 주지 않으면 하늘 영역 안에서 무작위로 정함
+        self.x = x if x is not None else random.uniform(HALF_WIDTH, get_canvas_width() - HALF_WIDTH)
+        self.y = y if y is not None else random.uniform(300, 540)
+        self.dir = dir if dir is not None else random.choice((-1, 1))  # 1: 오른쪽, -1: 왼쪽
+
+        # 새마다 기준 속도의 80~120% 로 날아 무리가 자연스럽게 흩어지도록 함
+        speed_mps = FLY_SPEED_MPS * random.uniform(0.8, 1.2)
+        self.speed_pps = speed_mps * PIXEL_PER_METER
+        # 초당 프레임 수 = 초당 날갯짓 횟수(속도 / 날갯짓당 거리) * 날갯짓당 프레임 수
+        self.frames_per_second = speed_mps / DISTANCE_PER_ACTION_M * FRAMES_PER_ACTION
+
+        # 날갯짓 시작 위상을 무작위로 해서 10마리가 똑같이 퍼덕이지 않게 함
+        self.frame = random.uniform(0, FRAMES_PER_ACTION)
 
     def update(self):
-        # 초당 증가시킬 프레임 수 = 날갯짓 1회의 프레임 수 * 초당 날갯짓 횟수
-        self.frame = (self.frame + FRAMES_PER_ACTION * ACTION_PER_TIME * game_framework.frame_time) % FRAMES_PER_ACTION
+        self.frame = (self.frame + self.frames_per_second * game_framework.frame_time) % FRAMES_PER_ACTION
 
         # 이동 거리 = 속도 * 프레임 시간
-        self.x += self.dir * FLY_SPEED_PPS * game_framework.frame_time
+        self.x += self.dir * self.speed_pps * game_framework.frame_time
 
         # 화면 끝에 닿으면 안쪽으로 되돌리고 방향 전환
         if self.x > get_canvas_width() - HALF_WIDTH:
