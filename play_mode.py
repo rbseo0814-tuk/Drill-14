@@ -47,6 +47,7 @@ def finish():
 
 def update():
     game_world.update()
+    # delay(0.1)  # p.25 실습: 강제적인 프레임 시간 증가 (테스트할 때 주석 해제)
 
 def render():
     clear_canvas()
